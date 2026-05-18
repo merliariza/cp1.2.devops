@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'python'
+        PYTHON = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python311\\python.exe'
     }
 
     options {
@@ -11,6 +11,14 @@ pipeline {
     }
 
     stages {
+
+        stage('Debug Python') {
+            steps {
+                bat '''
+                    %PYTHON% --version
+                '''
+            }
+        }
 
         stage('Get Code') {
             steps {
@@ -30,7 +38,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 bat '''
-                    %PYTHON% -m coverage run --branch -m pytest test/unit --junitxml=result-unit.xml
+                    %PYTHON% -m coverage run --branch -m pytest test/unit --junitxml=%WORKSPACE%\\result-unit.xml
                 '''
             }
 
@@ -98,7 +106,6 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-
                     bat '''
                         %PYTHON% -m bandit -r app -f json -o bandit-report.json
                     '''
@@ -132,7 +139,7 @@ pipeline {
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     bat '''
-                        %PYTHON% -m pytest test/rest --junitxml=result-rest.xml
+                        %PYTHON% -m pytest test/rest --junitxml=%WORKSPACE%\\result-rest.xml
                     '''
                 }
 
@@ -156,7 +163,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 bat '''
-                    start /B %PYTHON% app/api.py
+                    start /B %PYTHON% -m app.api
                 '''
 
                 bat '''
