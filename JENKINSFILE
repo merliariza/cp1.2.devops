@@ -73,14 +73,18 @@ pipeline {
         stage('REST') {
             steps {
                 bat 'start "" /B "%PYTHON%" -m app.api'
-                bat 'timeout /t 15 /nobreak'
+
+                // FIX WINDOWS (NO timeout)
+                bat 'ping 127.0.0.1 -n 15 > nul'
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
 
-                bat 'wmic process where "name like \'python%%\'" delete'
+                // kill solo API (más seguro que matar todo python)
+                bat 'wmic process where "CommandLine like \'%%app.api%%\'" delete'
             }
+
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'result-rest.xml'
@@ -91,12 +95,15 @@ pipeline {
         stage('Performance') {
             steps {
                 bat 'start "" /B "%PYTHON%" -m app.api'
-                bat 'timeout /t 15 /nobreak'
+
+                // FIX WINDOWS (NO timeout)
+                bat 'ping 127.0.0.1 -n 15 > nul'
 
                 bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
 
-                bat 'wmic process where "name like \'python%%\'" delete'
+                bat 'wmic process where "CommandLine like \'%%app.api%%\'" delete'
             }
+
             post {
                 always {
                     archiveArtifacts artifacts: 'performance-results.jtl', allowEmptyArchive: true
