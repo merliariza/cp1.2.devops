@@ -3,8 +3,8 @@ pipeline {
     agent any
 
     environment {
-        PYTHON  = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
-        JMETER  = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
+        PYTHON   = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
+        JMETER   = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
         API_PORT = '9090'
     }
 
@@ -80,8 +80,9 @@ pipeline {
 
         stage('Start API') {
             steps {
-                bat 'powershell -Command "Start-Process -FilePath \'%PYTHON%\' -ArgumentList \'-m\',\'app.api\' -NoNewWindow"'
-                bat 'powershell -Command "$ok = $false; for ($i = 0; $i -lt 10; $i++) { if (netstat -ano | Select-String \':%API_PORT%\') { Write-Host \'API lista\'; $ok = $true; break } Start-Sleep 3 } if (-not $ok) { Write-Error \'API no respondio\'; exit 1 }"'
+                bat 'start /B "" "%PYTHON%" -m app.api > api.log 2>&1'
+                bat 'powershell -Command "Start-Sleep -Seconds 20"'
+                bat 'netstat -ano | findstr :%API_PORT%'
             }
         }
 
@@ -121,7 +122,7 @@ pipeline {
     post {
         always {
             bat 'taskkill /F /IM python.exe /T || echo Sin proceso Python activo'
-            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true, allowEmptyArchive: true
+            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl,*.log', fingerprint: true, allowEmptyArchive: true
         }
         cleanup {
             bat 'exit 0'
