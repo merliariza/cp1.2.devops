@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'C:\Users\merli\AppData\Local\Microsoft\WindowsApps\python.exe'
+        PYTHON = 'C:\\Users\\merli\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe'
         JMETER = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
     }
 
