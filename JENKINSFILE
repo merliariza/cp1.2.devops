@@ -79,7 +79,7 @@ pipeline {
                     bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
 
-                bat 'wmic process where "CommandLine like ''%app.api%''" delete'
+                bat 'taskkill /F /IM python.exe /T'
             }
             post {
                 always {
@@ -97,7 +97,7 @@ pipeline {
                     bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
                 }
 
-                bat 'wmic process where "CommandLine like ''%app.api%''" delete'
+                bat 'taskkill /F /IM python.exe /T'
             }
             post {
                 always {
