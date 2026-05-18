@@ -74,25 +74,25 @@ pipeline {
         stage('REST') {
             steps {
 
-                // cerrar procesos previos si existen
+                // cerrar procesos previos (FIX COMILLAS)
                 catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                    bat 'wmic process where "CommandLine like ''%app.api%''" delete'
+                    bat "wmic process where \"CommandLine like '%app.api%'\" delete"
                 }
 
                 // iniciar API
                 bat 'start "" /B "%PYTHON%" -m app.api'
 
-                // espera más estable
+                // espera estable
                 bat 'timeout /t 8 /nobreak > nul'
 
-                // tests REST (no rompe pipeline)
+                // tests REST
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                     bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
 
-                // cerrar procesos python abiertos SOLO de API
+                // cerrar API
                 catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                    bat 'wmic process where "CommandLine like ''%app.api%''" delete'
+                    bat "wmic process where \"CommandLine like '%app.api%'\" delete"
                 }
             }
 
@@ -107,7 +107,7 @@ pipeline {
             steps {
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                    bat 'wmic process where "CommandLine like ''%app.api%''" delete'
+                    bat "wmic process where \"CommandLine like '%app.api%'\" delete"
                 }
 
                 bat 'start "" /B "%PYTHON%" -m app.api'
@@ -118,7 +118,7 @@ pipeline {
                 }
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                    bat 'wmic process where "CommandLine like ''%app.api%''" delete'
+                    bat "wmic process where \"CommandLine like '%app.api%'\" delete"
                 }
             }
 
