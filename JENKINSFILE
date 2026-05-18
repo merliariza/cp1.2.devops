@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     environment {
@@ -80,7 +81,8 @@ pipeline {
         stage('Start API') {
             steps {
                 bat 'start "" /B "%PYTHON%" -m app.api'
-                bat 'powershell -Command "Start-Sleep -Seconds 5"'
+                bat 'powershell -Command "Start-Sleep -Seconds 15"'
+                bat 'netstat -ano | findstr :%API_PORT%'
             }
         }
 
@@ -112,8 +114,8 @@ pipeline {
 
         stage('Stop API') {
             steps {
-                // SOLO cerrar el puerto, no matar todo python
-                bat 'powershell -Command "Get-NetTCPConnection -LocalPort 9090 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"'
+                bat 'taskkill /F /IM python.exe /T || exit 0'
+                bat 'timeout /t 3 >nul'
             }
         }
     }
@@ -121,8 +123,6 @@ pipeline {
     post {
         always {
             archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true
-        }
-        cleanup {
             cleanWs()
         }
     }
