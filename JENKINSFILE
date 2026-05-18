@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'python'
+        PYTHON = 'py'
     }
 
     options {
@@ -14,7 +14,7 @@ pipeline {
 
         stage('Debug Python') {
             steps {
-                bat 'python --version'
+                bat 'py --version'
             }
         }
 
@@ -36,7 +36,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 bat '''
-                    python -m coverage run --branch -m pytest test/unit --junitxml=result-unit.xml
+                    py -m coverage run --branch -m pytest test/unit --junitxml=result-unit.xml
                 '''
             }
 
@@ -55,8 +55,8 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 bat '''
-                    python -m coverage xml -o coverage.xml
-                    python -m coverage report
+                    py -m coverage xml -o coverage.xml
+                    py -m coverage report
                 '''
 
                 recordCoverage(
@@ -81,7 +81,7 @@ pipeline {
 
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     bat '''
-                        python -m flake8 . --tee --output-file=flake8-report.txt
+                        py -m flake8 . --tee --output-file=flake8-report.txt
                     '''
                 }
 
@@ -105,7 +105,7 @@ pipeline {
 
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     bat '''
-                        python -m bandit -r app -f json -o bandit-report.json
+                        py -m bandit -r app -f json -o bandit-report.json
                     '''
                 }
 
@@ -128,7 +128,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 bat '''
-                    start /B python -m app.api
+                    start /B py -m app.api
                 '''
 
                 bat '''
@@ -137,7 +137,7 @@ pipeline {
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     bat '''
-                        python -m pytest test/rest --junitxml=result-rest.xml
+                        py -m pytest test/rest --junitxml=result-rest.xml
                     '''
                 }
 
@@ -161,7 +161,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
 
                 bat '''
-                    start /B python -m app.api
+                    start /B py -m app.api
                 '''
 
                 bat '''
