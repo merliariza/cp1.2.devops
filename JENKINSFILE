@@ -80,11 +80,13 @@ pipeline {
 
         stage('Start API') {
             steps {
-                bat 'start /B "" "%PYTHON%" -m app.api 1>api.log 2>&1'
-                bat 'powershell -Command "Start-Sleep -Seconds 20"'
-                catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-                    bat 'netstat -ano | findstr :%API_PORT% || echo Puerto %API_PORT% no detectado, continuando igual'
-                }
+                bat '''
+                    set FLASK_APP=app.api
+                    set FLASK_ENV=production
+                    powershell -Command "Start-Job -ScriptBlock { & '%PYTHON%' -m app.api } | Out-Null"
+                    powershell -Command "Start-Sleep -Seconds 5"
+                    "%PYTHON%" -c "import urllib.request, sys, time; [sys.exit(0) for _ in range(10) if (time.sleep(2) or True) and (lambda: urllib.request.urlopen('http://localhost:9090/calc/add/1/1', timeout=2) and True)() or False]"
+                '''
             }
         }
 
@@ -104,7 +106,7 @@ pipeline {
         stage('Performance (JMeter)') {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                    bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
+                    bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl -JPORT=%API_PORT%'
                 }
             }
             post {
@@ -116,14 +118,14 @@ pipeline {
 
         stage('Stop API') {
             steps {
-                bat 'taskkill /F /IM python.exe /T || echo Sin proceso Python activo'
+                bat 'powershell -Command "Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force"'
             }
         }
     }
 
     post {
         always {
-            bat 'taskkill /F /IM python.exe /T || echo Sin proceso Python activo'
+            bat 'powershell -Command "Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force; exit 0"'
             archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl,*.log', fingerprint: true, allowEmptyArchive: true
         }
         cleanup {
