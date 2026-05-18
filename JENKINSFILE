@@ -3,7 +3,8 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'py'
+        PYTHON = 'C:\Users\merli\AppData\Local\Microsoft\WindowsApps\python.exe'
+        JMETER = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
     }
 
     options {
@@ -12,16 +13,8 @@ pipeline {
 
     stages {
 
-        stage('Debug Python') {
-            steps {
-                bat 'py --version'
-            }
-        }
-
         stage('Get Code') {
             steps {
-                echo 'Obteniendo codigo fuente...'
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
@@ -30,16 +23,11 @@ pipeline {
 
         stage('Unit') {
             steps {
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
-
-                bat '''
-                    py -m coverage run --branch -m pytest test/unit --junitxml=result-unit.xml
-                '''
+                bat '"%PYTHON%" -m coverage run --branch --source=app -m pytest test/unit --junitxml=result-unit.xml'
             }
-
             post {
                 always {
                     junit 'result-unit.xml'
@@ -49,23 +37,18 @@ pipeline {
 
         stage('Coverage') {
             steps {
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
-
-                bat '''
-                    py -m coverage xml -o coverage.xml
-                    py -m coverage report
-                '''
-
+                bat '"%PYTHON%" -m coverage xml -o coverage.xml'
+                bat '"%PYTHON%" -m coverage report'
                 recordCoverage(
                     tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']],
                     sourceCodeRetention: 'EVERY_BUILD',
                     enabledForFailure: true,
                     failNoReports: true,
                     globalThresholds: [
-                        [thresholdTarget: 'LINE', unhealthyThreshold: 85.0, unstableThreshold: 95.0],
+                        [thresholdTarget: 'LINE',   unhealthyThreshold: 85.0, unstableThreshold: 95.0],
                         [thresholdTarget: 'BRANCH', unhealthyThreshold: 80.0, unstableThreshold: 90.0]
                     ]
                 )
@@ -74,22 +57,17 @@ pipeline {
 
         stage('Static') {
             steps {
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
-
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                    bat '''
-                        py -m flake8 . --tee --output-file=flake8-report.txt
-                    '''
+                    bat '"%PYTHON%" -m flake8 . --tee --output-file=flake8-report.txt'
                 }
-
                 recordIssues(
                     enabledForFailure: true,
                     tools: [flake8(pattern: 'flake8-report.txt')],
                     qualityGates: [
-                        [threshold: 8, type: 'TOTAL', unstable: true],
+                        [threshold: 8,  type: 'TOTAL', unstable: true],
                         [threshold: 10, type: 'TOTAL', failure: true]
                     ]
                 )
@@ -98,17 +76,12 @@ pipeline {
 
         stage('Security Test') {
             steps {
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
-
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                    bat '''
-                        py -m bandit -r app -f json -o bandit-report.json
-                    '''
+                    bat '"%PYTHON%" -m bandit -r app -f json -o bandit-report.json'
                 }
-
                 recordIssues(
                     enabledForFailure: true,
                     tools: [bandit(pattern: 'bandit-report.json')],
@@ -122,64 +95,35 @@ pipeline {
 
         stage('REST') {
             steps {
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
-
-                bat '''
-                    start /B py -m app.api
-                '''
-
-                bat '''
-                    timeout /t 15 /nobreak
-                '''
-
+                bat 'start /B "%PYTHON%" -m app.api'
+                bat 'timeout /t 15 /nobreak'
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    bat '''
-                        py -m pytest test/rest --junitxml=result-rest.xml
-                    '''
+                    bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
-
-                bat '''
-                    taskkill /F /IM python.exe /T
-                '''
+                bat 'taskkill /F /IM python.exe /T'
             }
-
             post {
                 always {
-                    junit 'result-rest.xml'
+                    junit allowEmptyResults: true, testResults: 'result-rest.xml'
                 }
             }
         }
 
         stage('Performance') {
             steps {
-
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
-
-                bat '''
-                    start /B py -m app.api
-                '''
-
-                bat '''
-                    timeout /t 15 /nobreak
-                '''
-
-                bat '''
-                    C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test\\jmeter\\performance.jmx -l performance-results.jtl
-                '''
-
-                bat '''
-                    taskkill /F /IM python.exe /T
-                '''
+                bat 'start /B "%PYTHON%" -m app.api'
+                bat 'timeout /t 15 /nobreak'
+                bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
+                bat 'taskkill /F /IM python.exe /T'
             }
-
             post {
                 always {
-
                     perfReport(
                         sourceDataFiles: 'performance-results.jtl',
                         errorFailedThreshold: 0,
@@ -191,11 +135,9 @@ pipeline {
     }
 
     post {
-
         always {
             archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true
         }
-
         cleanup {
             cleanWs()
         }
