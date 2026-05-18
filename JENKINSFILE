@@ -1,74 +1,198 @@
 pipeline {
+
     agent any
+
+    environment {
+        PYTHON = 'python'
+    }
+
+    options {
+        disableConcurrentBuilds()
+    }
 
     stages {
 
         stage('Get Code') {
             steps {
-                echo 'Obteniendo codigo...'
+                echo 'Obteniendo codigo fuente...'
+
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
             }
         }
 
-        stage('Build') {
+        stage('Unit') {
             steps {
-                bat 'python --version'
-                bat 'dir'
+
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
+
+                bat '''
+                    %PYTHON% -m coverage run --branch -m pytest test/unit --junitxml=result-unit.xml
+                '''
             }
-        }
 
-        stage('Unit Tests') {
-            steps {
-                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-
-                    bat '''
-                        python -m coverage run -m pytest test/unit --junitxml=result-unit.xml
-                        python -m coverage xml
-                    '''
+            post {
+                always {
+                    junit 'result-unit.xml'
                 }
             }
         }
 
-        stage('Flake8') {
+        stage('Coverage') {
             steps {
+
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
+
                 bat '''
-                    python -m flake8 . --output-file=flake8-report.txt
+                    %PYTHON% -m coverage xml -o coverage.xml
+                    %PYTHON% -m coverage report
                 '''
+
+                recordCoverage(
+                    tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']],
+                    sourceCodeRetention: 'EVERY_BUILD',
+                    enabledForFailure: true,
+                    failNoReports: true,
+                    globalThresholds: [
+                        [thresholdTarget: 'LINE', unhealthyThreshold: 85.0, unstableThreshold: 95.0],
+                        [thresholdTarget: 'BRANCH', unhealthyThreshold: 80.0, unstableThreshold: 90.0]
+                    ]
+                )
             }
         }
 
-        stage('Bandit') {
+        stage('Static') {
             steps {
-                bat '''
-                    python -m bandit -r app -f txt -o bandit-report.txt
-                '''
+
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
+
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    bat '''
+                        %PYTHON% -m flake8 . --tee --output-file=flake8-report.txt
+                    '''
+                }
+
+                recordIssues(
+                    enabledForFailure: true,
+                    tools: [flake8(pattern: 'flake8-report.txt')],
+                    qualityGates: [
+                        [threshold: 8, type: 'TOTAL', unstable: true],
+                        [threshold: 10, type: 'TOTAL', failure: true]
+                    ]
+                )
             }
         }
 
-        stage('REST Tests') {
+        stage('Security Test') {
             steps {
 
-                bat '''
-                    start /B python app/api.py
-                '''
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
 
-                bat '''
-                    start /B java -jar test\\wiremock\\wiremock-standalone-3.13.2.jar --port 9090 --root-dir test\\wiremock
-                '''
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
 
-                bat '''
-                    timeout /t 10
-                '''
+                    bat '''
+                        %PYTHON% -m bandit -r app -f json -o bandit-report.json
+                    '''
+                }
 
-                bat '''
-                    python -m pytest test/rest --junitxml=result-rest.xml
-                '''
+                recordIssues(
+                    enabledForFailure: true,
+                    tools: [bandit(pattern: 'bandit-report.json')],
+                    qualityGates: [
+                        [threshold: 2, type: 'TOTAL', unstable: true],
+                        [threshold: 4, type: 'TOTAL', failure: true]
+                    ]
+                )
             }
         }
 
-        stage('Results') {
+        stage('REST') {
             steps {
-                junit 'result-*.xml'
+
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
+
+                bat '''
+                    start /B %PYTHON% -m app.api
+                '''
+
+                bat '''
+                    timeout /t 15 /nobreak
+                '''
+
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    bat '''
+                        %PYTHON% -m pytest test/rest --junitxml=result-rest.xml
+                    '''
+                }
+
+                bat '''
+                    taskkill /F /IM python.exe /T
+                '''
             }
+
+            post {
+                always {
+                    junit 'result-rest.xml'
+                }
+            }
+        }
+
+        stage('Performance') {
+            steps {
+
+                bat 'whoami'
+                bat 'hostname'
+                bat 'echo %WORKSPACE%'
+
+                bat '''
+                    start /B %PYTHON% app/api.py
+                '''
+
+                bat '''
+                    timeout /t 15 /nobreak
+                '''
+
+                bat '''
+                    C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test\\jmeter\\performance.jmx -l performance-results.jtl
+                '''
+
+                bat '''
+                    taskkill /F /IM python.exe /T
+                '''
+            }
+
+            post {
+                always {
+
+                    perfReport(
+                        sourceDataFiles: 'performance-results.jtl',
+                        errorFailedThreshold: 0,
+                        errorUnstableThreshold: 0
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true
+        }
+
+        cleanup {
+            cleanWs()
         }
     }
 }
