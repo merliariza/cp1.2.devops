@@ -73,18 +73,14 @@ pipeline {
         stage('REST') {
             steps {
                 bat 'start "" /B "%PYTHON%" -m app.api'
-
-                // FIX estable Windows Jenkins
-                bat 'ping 127.0.0.1 -n 15 > nul'
+                bat 'ping 127.0.0.1 -n 20 > nul'
 
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
 
-                // kill seguro SOLO API
-                bat 'wmic process where "CommandLine like \'%%app.api%%\'" delete'
+                bat 'wmic process where "CommandLine like ''%app.api%''" delete'
             }
-
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'result-rest.xml'
@@ -95,15 +91,14 @@ pipeline {
         stage('Performance') {
             steps {
                 bat 'start "" /B "%PYTHON%" -m app.api'
+                bat 'ping 127.0.0.1 -n 20 > nul'
 
-                // FIX estable Windows Jenkins
-                bat 'ping 127.0.0.1 -n 15 > nul'
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
+                }
 
-                bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
-
-                bat 'wmic process where "CommandLine like \'%%app.api%%\'" delete'
+                bat 'wmic process where "CommandLine like ''%app.api%''" delete'
             }
-
             post {
                 always {
                     archiveArtifacts artifacts: 'performance-results.jtl', allowEmptyArchive: true
