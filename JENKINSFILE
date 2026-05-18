@@ -1,56 +1,74 @@
 pipeline {
     agent any
 
-     stages {
+    stages {
+
         stage('Get Code') {
             steps {
-                // Obtener código del repo
-                git 'https://github.com/anieto-unir/helloworld.git'
+                echo 'Obteniendo codigo...'
             }
         }
 
-    stage('Build') {
-        steps {
-            echo 'Eyyyy, esto es Python. No hay que compilar nada!!!'
-	    echo WORKSPACE
-	    bat 'dir'
+        stage('Build') {
+            steps {
+                bat 'python --version'
+                bat 'dir'
+            }
         }
-    }
 
-    stage('Tests')
-    {
-        parallel {
+        stage('Unit Tests') {
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
 
-            stage('Unit') {
-                steps {
-                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                        bat '''
-                                set PYTHONPATH=%WORKSPACE%
-                                pytest --junitxml=result-unit.xml test\\unit
-                        '''
-                    }
+                    bat '''
+                        python -m coverage run -m pytest test/unit --junitxml=result-unit.xml
+                        python -m coverage xml
+                    '''
                 }
             }
-            
-            stage('Rest') {
-                steps {
-                    bat '''
-                        set FLASK_APP=app\\api.py
-                        set FLASK_ENV=development
-                        start flask run
-                        start java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir test\\wiremock
-                        set PYTHONPATH=%WORKSPACE%
-                        pytest --junitxml=result-rest.xml test\\rest
-                    '''
-                }    
-            }    
+        }
+
+        stage('Flake8') {
+            steps {
+                bat '''
+                    python -m flake8 . --output-file=flake8-report.txt
+                '''
+            }
+        }
+
+        stage('Bandit') {
+            steps {
+                bat '''
+                    python -m bandit -r app -f txt -o bandit-report.txt
+                '''
+            }
+        }
+
+        stage('REST Tests') {
+            steps {
+
+                bat '''
+                    start /B python app/api.py
+                '''
+
+                bat '''
+                    start /B java -jar test\\wiremock\\wiremock-standalone-3.13.2.jar --port 9090 --root-dir test\\wiremock
+                '''
+
+                bat '''
+                    timeout /t 10
+                '''
+
+                bat '''
+                    python -m pytest test/rest --junitxml=result-rest.xml
+                '''
+            }
+        }
+
+        stage('Results') {
+            steps {
+                junit 'result-*.xml'
+            }
         }
     }
-    
-    stage ('Results') {
-        steps {
-            junit 'result*.xml'
-        }
-    }
-  }
 }
