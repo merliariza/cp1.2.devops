@@ -1,11 +1,10 @@
 pipeline {
-
     agent any
 
     environment {
         PYTHON = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
         JMETER = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
-        API_PORT = '5000'
+        API_PORT = '9090'
     }
 
     options {
@@ -25,7 +24,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 bat '"%PYTHON%" -m pip install --upgrade pip'
-                bat '"%PYTHON%" -m pip install flask pytest coverage flake8 bandit'
+                bat '"%PYTHON%" -m pip install flask pytest coverage flake8 bandit requests'
             }
         }
 
@@ -78,23 +77,19 @@ pipeline {
             }
         }
 
+        stage('Start API') {
+            steps {
+                bat 'start "" /B "%PYTHON%" -m app.api'
+                bat 'powershell -Command "Start-Sleep -Seconds 5"'
+            }
+        }
+
         stage('REST') {
             steps {
-
-                // iniciar API
-                bat 'start "" /B "%PYTHON%" -m app.api'
-
-                // esperar a que realmente levante (MEJOR QUE ping)
-                bat 'powershell -Command "Start-Sleep -Seconds 12"'
-
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                     bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
-
-                // matar API (forma más estable)
-                bat 'taskkill /F /IM python.exe /T'
             }
-
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'result-rest.xml'
@@ -104,21 +99,21 @@ pipeline {
 
         stage('Performance') {
             steps {
-
-                bat 'start "" /B "%PYTHON%" -m app.api'
-                bat 'powershell -Command "Start-Sleep -Seconds 12"'
-
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
                 }
-
-                bat 'taskkill /F /IM python.exe /T'
             }
-
             post {
                 always {
                     archiveArtifacts artifacts: 'performance-results.jtl', allowEmptyArchive: true
                 }
+            }
+        }
+
+        stage('Stop API') {
+            steps {
+                // SOLO cerrar el puerto, no matar todo python
+                bat 'powershell -Command "Get-NetTCPConnection -LocalPort 9090 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"'
             }
         }
     }
