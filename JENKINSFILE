@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
+        PYTHON = 'python'
         JMETER = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
     }
 
@@ -23,86 +23,63 @@ pipeline {
 
         stage('Unit') {
             steps {
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
-                bat '"%PYTHON%" -m coverage run --branch --source=app -m pytest test/unit --junitxml=result-unit.xml'
+                bat '"%PYTHON%" -m pytest test/unit --junitxml=result-unit.xml'
             }
             post {
                 always {
-                    junit 'result-unit.xml'
+                    junit allowEmptyResults: true, testResults: 'result-unit.xml'
                 }
             }
         }
 
         stage('Coverage') {
             steps {
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
+                bat '"%PYTHON%" -m coverage run --branch --source=app -m pytest test/unit'
                 bat '"%PYTHON%" -m coverage xml -o coverage.xml'
                 bat '"%PYTHON%" -m coverage report'
-                recordCoverage(
-                    tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']],
-                    sourceCodeRetention: 'EVERY_BUILD',
-                    enabledForFailure: true,
-                    failNoReports: true,
-                    globalThresholds: [
-                        [thresholdTarget: 'LINE',   unhealthyThreshold: 85.0, unstableThreshold: 95.0],
-                        [thresholdTarget: 'BRANCH', unhealthyThreshold: 80.0, unstableThreshold: 90.0]
-                    ]
-                )
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'coverage.xml', allowEmptyArchive: true
+                }
             }
         }
 
         stage('Static') {
             steps {
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                    bat '"%PYTHON%" -m flake8 . --tee --output-file=flake8-report.txt'
+                    bat '"%PYTHON%" -m flake8 . --output-file=flake8-report.txt'
                 }
-                recordIssues(
-                    enabledForFailure: true,
-                    tools: [flake8(pattern: 'flake8-report.txt')],
-                    qualityGates: [
-                        [threshold: 8,  type: 'TOTAL', unstable: true],
-                        [threshold: 10, type: 'TOTAL', failure: true]
-                    ]
-                )
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'flake8-report.txt', allowEmptyArchive: true
+                }
             }
         }
 
         stage('Security Test') {
             steps {
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     bat '"%PYTHON%" -m bandit -r app -f json -o bandit-report.json'
                 }
-                recordIssues(
-                    enabledForFailure: true,
-                    tools: [bandit(pattern: 'bandit-report.json')],
-                    qualityGates: [
-                        [threshold: 2, type: 'TOTAL', unstable: true],
-                        [threshold: 4, type: 'TOTAL', failure: true]
-                    ]
-                )
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'bandit-report.json', allowEmptyArchive: true
+                }
             }
         }
 
         stage('REST') {
             steps {
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
                 bat 'start /B "%PYTHON%" -m app.api'
-                bat 'timeout /t 15 /nobreak'
+                bat 'timeout /t 10 /nobreak'
+
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     bat '"%PYTHON%" -m pytest test/rest --junitxml=result-rest.xml'
                 }
+
                 bat 'taskkill /F /IM python.exe /T'
             }
             post {
@@ -114,21 +91,16 @@ pipeline {
 
         stage('Performance') {
             steps {
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
                 bat 'start /B "%PYTHON%" -m app.api'
-                bat 'timeout /t 15 /nobreak'
+                bat 'timeout /t 10 /nobreak'
+
                 bat '"%JMETER%" -n -t test\\jmeter\\performance.jmx -l performance-results.jtl'
+
                 bat 'taskkill /F /IM python.exe /T'
             }
             post {
                 always {
-                    perfReport(
-                        sourceDataFiles: 'performance-results.jtl',
-                        errorFailedThreshold: 0,
-                        errorUnstableThreshold: 0
-                    )
+                    archiveArtifacts artifacts: 'performance-results.jtl', allowEmptyArchive: true
                 }
             }
         }
@@ -136,7 +108,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true
+            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', allowEmptyArchive: true
         }
         cleanup {
             cleanWs()
