@@ -3,8 +3,8 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
-        JMETER = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
+        PYTHON  = 'C:\\Users\\merli\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
+        JMETER  = 'C:\\Users\\merli\\Downloads\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
         API_PORT = '9090'
     }
 
@@ -54,7 +54,7 @@ pipeline {
 
         stage('Static Analysis (flake8)') {
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     bat '"%PYTHON%" -m flake8 . --tee --output-file=flake8-report.txt'
                 }
             }
@@ -67,7 +67,7 @@ pipeline {
 
         stage('Security (bandit)') {
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     bat '"%PYTHON%" -m bandit -r app -f json -o bandit-report.json'
                 }
             }
@@ -80,9 +80,8 @@ pipeline {
 
         stage('Start API') {
             steps {
-                bat 'start "" /B "%PYTHON%" -m app.api'
-                bat 'powershell -Command "Start-Sleep -Seconds 15"'
-                bat 'netstat -ano | findstr :9090 || echo API no lista aún'
+                bat 'powershell -Command "Start-Process -FilePath \'%PYTHON%\' -ArgumentList \'-m\',\'app.api\' -NoNewWindow"'
+                bat 'powershell -Command "$ok = $false; for ($i = 0; $i -lt 10; $i++) { if (netstat -ano | Select-String \':%API_PORT%\') { Write-Host \'API lista\'; $ok = $true; break } Start-Sleep 3 } if (-not $ok) { Write-Error \'API no respondio\'; exit 1 }"'
             }
         }
 
@@ -114,16 +113,16 @@ pipeline {
 
         stage('Stop API') {
             steps {
-                bat 'taskkill /F /IM python.exe /T || echo API ya cerrada'
+                bat 'taskkill /F /IM python.exe /T || echo Sin proceso Python activo'
             }
         }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true
+            bat 'taskkill /F /IM python.exe /T || echo Sin proceso Python activo'
+            archiveArtifacts artifacts: '*.xml,*.txt,*.json,*.jtl', fingerprint: true, allowEmptyArchive: true
         }
-
         cleanup {
             bat 'exit 0'
             cleanWs()
